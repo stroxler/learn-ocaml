@@ -1,0 +1,25 @@
+(library
+  (name arith)
+  (modules arith)
+  (libraries core base str)
+  (preprocess
+    (pps
+     ppx_deriving.show
+     ppx_deriving.eq
+     ppx_deriving.ord
+     ppx_sexp_conv))
+  (synopsis "Arithmetic vm's from Graham Hutton's book")
+  )
+
+(library
+  (name ex_modules)
+  (modules ex_modules)
+  (libraries core base str)
+  (preprocess
+    (pps
+     ppx_deriving.show
+     ppx_deriving.eq
+     ppx_deriving.ord
+     ppx_sexp_conv))
+  (synopsis "Module examples from the Cornell ebook")
+  )
