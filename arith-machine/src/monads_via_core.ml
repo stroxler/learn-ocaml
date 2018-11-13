@@ -1,6 +1,27 @@
 open Core
 
 
+(* Notes
+
+   1. Think about whether there's a way to use the Haskell
+      MonadX (MonadReader, MonadWriter, MonadIO) pattern from
+      mtl in the context of ocaml. Thus far I'm not seeing an
+      easy way to do it.
+
+   2. Think about whether to use the Make2 interface from
+      jane street core, rather than what I'm doing now. At the
+      moment I'm kind of inclined to leave things as they are.
+
+   3. Study existing MTL implementations...
+      - This one is unmaintained, but has some nice examples:
+        https://github.com/rgrinberg/ocaml-mtl/
+      - There's a pretty serious monad library, including transformers,
+        embedded in the binary analysis project from CMU
+        https://discuss.ocaml.org/t/ann-monads-the-missing-monad-transformers-library/830/4
+        http://binaryanalysisplatform.github.io/bap/api/v1.3.0/Monads.Std.html
+        https://github.com/BinaryAnalysisPlatform/bap/tree/master/lib/monads
+
+*)
 
 (* Turns a monad basic's [bind] (a function), [return] (a function), and
    [map] (an enum which is either [`Define_using_bind] or [`Custom func]
@@ -62,6 +83,7 @@ module CounterMonoid = struct
 end
 
 
+
 module OptionT(M: Monad.Basic)
   : Monad.S with type 'a t = 'a Option.t M.t = struct
 
@@ -98,6 +120,11 @@ module OptionT(M: Monad.Basic)
     end )
 
 
+  let lift (m: 'a M.t) : 'a t =
+    M.bind m ~f:(
+      fun x -> M.return @@ Some x
+    )
+
   (* Todo: add the mtl goodies here *)
 end
 
@@ -116,12 +143,31 @@ module EitherT (M: Monad.Basic) (E: Concrete)
 
       let bind m ~f = M.bind m ~f:(fun x -> match x with
           | First(v) -> f v
-          | Second(e) -> M.return (Second e)
+          | Second(e) -> M.return @@ Second(e)
         )
 
       let map = `Define_using_bind
 
     end )
+
+
+  let lift (m: 'a M.t) : 'a t =
+    M.bind m ~f:(
+      fun a -> M.return @@ Either.First a
+    )
+
+
+  let throwSecond (e: E.t) : 'a t =
+    M.return @@ Either.Second e
+
+  let catchSecond m handler =
+    M.bind m ~f:(
+      fun x -> match x with
+        | Second e -> handler e
+        | _first -> m
+    )
+
+  let liftEither eith = M.return eith
 
 end
 
@@ -148,6 +194,12 @@ module StateT (M: Monad.Basic) (S: Concrete)
       let map = `Define_using_bind
 
     end )
+
+
+  let lift (m: 'a M.t) : 'a t =
+    fun s -> M.bind m ~f:(
+         fun a -> M.return (a, s)
+       )
 
 end
 
@@ -178,6 +230,12 @@ module WriterT (M: Monad.Basic) (W: Monoid)
 
     end )
 
+
+  let lift (m: 'a M.t) : 'a t =
+    M.bind m ~f:(
+      fun a -> M.return (a, W.mempty)
+    )
+
 end
 
 
@@ -206,6 +264,9 @@ module ReaderT (M: Monad.Basic) (R: Concrete)
 
     end )
 
+  let lift (m: 'a M.t) : 'a t =
+    (fun r -> m)
+
 end
 
 
@@ -232,5 +293,10 @@ module ContT (M: Monad.Basic) (R: Concrete)
       let map = `Define_using_bind
 
     end )
+
+  (* Note that this is the only lift implementation
+     that actually *require* bind *)
+  let lift (m: 'a M.t) : 'a t =
+    fun cb -> M.bind m ~f:cb
 
 end
